@@ -34,4 +34,11 @@ One user, no public surface.
 
 ## Changelog
 
-- (nothing built yet — v1 spine is next)
+- WHOOP integration (`db.py`, `whoop.py`): OAuth 2.0 authorization-code flow
+  (offline scope, all read scopes), rotating-refresh-token handling,
+  reconnect-on-failure Postgres via `DATABASE_URL`. Fetches today's cycle
+  (strain), recovery, and sleep from the v2 API, gating on `score_state ==
+  SCORED` and treating a 404 on recovery as "not synced yet." Verified
+  end-to-end with `whoop_test.py`: real recovery/sleep/strain print in the
+  terminal after one-time browser approval, and a second run reuses the
+  stored token without reopening the browser.
