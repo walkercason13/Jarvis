@@ -3,7 +3,7 @@
 ## What this is
 
 A personal AI assistant ("Jarvis") for one user, Walker. WHOOP biometrics +
-Google Calendar → Claude API (persona system prompt) → Telegram morning
+Apple Calendar → Claude API (persona system prompt) → Telegram morning
 briefing and evening debrief. Python 3.12, Postgres, hosted on Railway.
 One user, no public surface.
 
@@ -25,8 +25,8 @@ One user, no public surface.
    ahead, do not scaffold future features "while we're here."
 3. **Secrets in environment variables, always.** Nothing sensitive in source or
    git history.
-4. **Small modules, one responsibility each** (whoop.py, gcal.py, bot.py,
-   brain.py, briefing.py, debrief.py, db.py).
+4. **Small modules, one responsibility each** (whoop.py, apple_calendar.py,
+   bot.py, brain.py, briefing.py, debrief.py, db.py).
 5. **Fail soft.** If an external API is down, the daily message still sends
    with whatever loaded, and Jarvis says plainly what's missing.
 6. **After each feature ships, add one line to the changelog below** so future
@@ -51,3 +51,16 @@ One user, no public surface.
   reject path is untested against a real second account — logic-verified
   only. `/status`, the "thinking" ack, and Railway/webhook deployment are
   deferred until brain.py and the scheduler exist.
+- Apple Calendar (`apple_calendar.py`, read-only): CalDAV against
+  `caldav.icloud.com` via `APPLE_ID`/`APPLE_APP_PASSWORD`, no OAuth. Named
+  `apple_calendar.py` rather than the build brief's `calendar.py` to avoid
+  shadowing Python's stdlib `calendar` module. `list_calendars()` for
+  discovery, `get_today_and_tomorrow()` reads events from the calendars
+  named in `CALENDAR_NAMES` (currently `Home,Work`), gated in
+  `America/New_York`. Auth failures raise `CalendarAuthError` with a plain
+  diagnostic rather than failing silently, per the build brief's
+  app-specific-password-revocation warning. Verified end-to-end with
+  `calendar_test.py` against real account data (confirmed correct via a raw
+  unfiltered object dump, not just the date-range search). Known gap: the
+  calendar with Walker's actual class schedule is a subscribed `.ics`/webcal
+  feed, which CalDAV cannot reach — deferred, not built.
