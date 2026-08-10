@@ -42,3 +42,12 @@ One user, no public surface.
   end-to-end with `whoop_test.py`: real recovery/sleep/strain print in the
   terminal after one-time browser approval, and a second run reuses the
   stored token without reopening the browser.
+- Telegram bot (`bot.py`): standalone `send_message()` outbound path (for
+  the future scheduled briefing/debrief jobs) plus a polling inbound path
+  with `/start` and echo handlers, both gated by a `TELEGRAM_ALLOWED_USER_ID`
+  allowlist that silently drops everyone else. Verified end-to-end:
+  `send_message()` produced a real push notification, and `/start` +
+  a plain-text message both worked over live polling. The allowlist's
+  reject path is untested against a real second account — logic-verified
+  only. `/status`, the "thinking" ack, and Railway/webhook deployment are
+  deferred until brain.py and the scheduler exist.
