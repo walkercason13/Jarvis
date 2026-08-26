@@ -7,7 +7,8 @@ import os
 from datetime import datetime, timedelta
 
 import caldav
-from caldav.lib.error import DAVError
+import requests
+from caldav.lib.error import AuthorizationError, DAVError
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
 
@@ -21,11 +22,44 @@ CALDAV_URL = "https://caldav.icloud.com/"
 TZ = ZoneInfo("America/New_York")
 
 
-class CalendarAuthError(RuntimeError):
-    """Raised whenever CalDAV rejects our credentials. Apple silently
-    revokes ALL app-specific passwords when the primary Apple ID password
-    is changed or reset, so this must never be swallowed or treated as
-    'no events today.'"""
+class CalendarError(RuntimeError):
+    """A calendar failure whose cause has NOT been identified as an auth
+    problem — a network drop, an iCloud 5xx, a malformed response. Carries the
+    underlying exception type and message so callers report what actually
+    happened rather than guessing at a cause."""
+
+
+class CalendarAuthError(CalendarError):
+    """Raised ONLY when CalDAV genuinely rejects our credentials (a verified
+    401/403). Apple silently revokes ALL app-specific passwords when the
+    primary Apple ID password is changed or reset, so a real auth failure must
+    never be swallowed or treated as 'no events today.' Equally, an unrelated
+    failure must never be reported as a revoked password — that sends Walker
+    to regenerate a credential that was never the problem."""
+
+
+def _auth_error(underlying):
+    return CalendarAuthError(
+        "Apple Calendar rejected the credentials — the app-specific password has "
+        "been revoked or is wrong. Apple revokes them automatically when the Apple "
+        "ID password is changed or reset. Regenerate one at appleid.apple.com and "
+        f"update APPLE_APP_PASSWORD in .env. ({type(underlying).__name__}: {underlying})"
+    )
+
+
+def _wrap(action, e):
+    """Turn a CalDAV/network failure into the narrowest accurate error. Only a
+    verified 401/403 becomes a CalendarAuthError."""
+    if isinstance(e, AuthorizationError):
+        return _auth_error(e)
+
+    response = getattr(e, "response", None)
+    status = getattr(response, "status_code", None)
+    if status in (401, 403):
+        return _auth_error(e)
+
+    detail = f" (HTTP {status})" if status else ""
+    return CalendarError(f"{action} failed{detail} — {type(e).__name__}: {e}")
 
 
 def _client():
@@ -36,13 +70,8 @@ def _client():
             password=APPLE_APP_PASSWORD,
         )
         principal = client.get_principal()
-    except DAVError as e:
-        raise CalendarAuthError(
-            "Apple Calendar authentication failed — the app-specific password may "
-            "have been revoked. This happens automatically if the Apple ID password "
-            "was changed or reset. Regenerate one at appleid.apple.com and update "
-            f"APPLE_APP_PASSWORD in .env. (underlying error: {e})"
-        ) from e
+    except (DAVError, requests.RequestException) as e:
+        raise _wrap("Connecting to Apple Calendar", e) from e
     return principal
 
 
@@ -50,7 +79,10 @@ def list_calendars():
     """Every calendar name found on the account — the discovery step for
     choosing what goes in CALENDAR_NAMES."""
     principal = _client()
-    return [cal.name for cal in principal.get_calendars()]
+    try:
+        return [cal.name for cal in principal.get_calendars()]
+    except (DAVError, requests.RequestException) as e:
+        raise _wrap("Listing the calendars on the account", e) from e
 
 
 def _selected_calendars(principal):
@@ -61,7 +93,11 @@ def _selected_calendars(principal):
         )
 
     wanted = [name.strip() for name in CALENDAR_NAMES.split(",") if name.strip()]
-    all_calendars = {cal.name: cal for cal in principal.get_calendars()}
+
+    try:
+        all_calendars = {cal.name: cal for cal in principal.get_calendars()}
+    except (DAVError, requests.RequestException) as e:
+        raise _wrap("Listing the calendars on the account", e) from e
 
     selected = []
     for name in wanted:
@@ -81,7 +117,12 @@ def get_events(start, end):
     events = []
 
     for cal in _selected_calendars(principal):
-        for obj in cal.search(start=start, end=end, event=True, expand=True):
+        try:
+            found = cal.search(start=start, end=end, event=True, expand=True)
+        except (DAVError, requests.RequestException) as e:
+            raise _wrap(f"Reading the '{cal.name}' calendar", e) from e
+
+        for obj in found:
             comp = obj.get_icalendar_component()
             events.append(
                 {

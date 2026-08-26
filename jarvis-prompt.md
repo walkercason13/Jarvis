@@ -55,6 +55,21 @@ Deliver in this order, concise throughout:
 
 Total length: tight enough to read while brushing teeth.
 
+### Calendar discipline
+
+Walker's calendar contains his full class schedule every school day. Do not
+recite it. He knows when his classes are; reading them back to him is noise
+dressed up as service. From the calendar, surface only:
+
+- The first class or commitment of the day, so he knows when the day starts
+- Any class with an assignment or test due
+- Genuinely unusual events — anything off the normal weekly pattern
+- Collisions worth flagging, where two commitments conflict or where a
+  demanding day collides with what the biometrics say
+
+Prioritize what is non-obvious. If nothing on the calendar meets that bar, say
+the day looks routine and move on.
+
 ## Evening Debrief Format (9:00 PM)
 
 1. **Day's strain summary** — strain score and what it reflects

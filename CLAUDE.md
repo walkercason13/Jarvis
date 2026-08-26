@@ -64,3 +64,47 @@ One user, no public surface.
   unfiltered object dump, not just the date-range search). Known gap: the
   calendar with Walker's actual class schedule is a subscribed `.ics`/webcal
   feed, which CalDAV cannot reach — deferred, not built.
+- Morning briefing (`db.py`, `brain.py`, `briefing.py`, `set_goals.py`): a
+  single-row `goals` table seeded on first run and editable via
+  `set_goals.py`; `brain.py` loads `jarvis-prompt.md`, substitutes
+  `{{CURRENT_GOALS}}` from that table, assembles today's WHOOP + calendar data
+  into a user message, and calls the Claude API with `CLAUDE_MODEL` (no
+  model-specific params, so the call stays valid if the model changes);
+  `briefing.py` wires it together and sends via `bot.send_markdown`. Fail
+  soft: each source loads
+  independently and any failure becomes a plain "not available" line naming
+  its own real exception type and message. Diagnoses are never guessed — the
+  "regenerate the app-specific password" claim fires only on a verified
+  CalDAV 401/403 (`CalendarAuthError`, now split from the new generic
+  `CalendarError`), a failed cycle request is never reported as "the strap
+  hasn't synced," and unrecognized errors are labelled as unidentified rather
+  than blamed on the nearest plausible cause. A Claude API failure (bad key,
+  billing, rate limit) is reported as Claude-side, sends nothing, and exits 1
+  rather than hardcoding an in-character apology. Verified end-to-end:
+  `python briefing.py` put a real briefing on Walker's phone from live WHOOP
+  data, and `briefing_test.py` passes six diagnosis-accuracy checks plus a
+  fail-soft delivery run. Appended a calendar rule to `jarvis-prompt.md`: the
+  full class schedule is never recited, only the first commitment, work due,
+  unusual events, and collisions. Not built: scheduling/the 7:00 AM
+  poll-then-brief loop, the evening debrief, plain-English goal updates by
+  message, `/status`, deployment. Known gap: `Home` and `Work` are the only
+  CalDAV-reachable calendars and both are currently empty, so the calendar
+  half of the briefing has no content until the subscribed `.ics` schedule is
+  reachable.
+- Telegram formatting (`telegram_format.py`, `bot.py`): Claude writes standard
+  Markdown, which Telegram renders as literal `**asterisks**` and `#` hashes.
+  `telegram_format.to_html()` converts it deterministically — rather than
+  relying on the model to remember a formatting rule — into the tag subset
+  Telegram accepts: headings and bold to `<b>`, italics to `<i>`, `>` quotes
+  to `<blockquote>`, backticks to `<code>`/`<pre>`, links to `<a>`, bullet
+  markers to `•`, and horizontal rules dropped (Telegram has no equivalent;
+  the blank lines already separate sections). Delivery now lives entirely in
+  `bot.py`: `send_markdown()` chunks the Markdown *before* converting, so a
+  chunk boundary can never land inside a tag or a blockquote, and falls back
+  to unformatted text on a Telegram `BadRequest` so a formatting bug never
+  costs the briefing itself. `send_message()` takes an optional `parse_mode`.
+  Verified: `telegram_format_test.py` passes 19 checks on real briefing output
+  (nothing Markdown-ish survives, tags balanced, only supported tags), a real
+  formatted briefing rendered correctly on the phone, and deliberately
+  malformed HTML triggered the plain-text fallback instead of losing the
+  message.
